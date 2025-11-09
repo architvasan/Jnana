@@ -334,6 +334,92 @@ class CoScientist:
             self.logger.error(f"Error evolving hypothesis {hypothesis_id}: {e}")
             return {"error": str(e), "evolved_hypothesis_id": hypothesis_id}
 
+    def improve_hypothesis(self, hypothesis_id: str, experimental_results: Dict) -> Dict:
+        """
+        Improve a hypothesis based on experimental results from BindCraft and MD simulations.
+
+        This method evaluates experimental results, decides whether to continue optimization
+        or complete the process, and suggests new parameters for the next round if continuing.
+
+        Args:
+            hypothesis_id: ID of hypothesis to improve
+            experimental_results: Dictionary containing experimental results with structure:
+                {
+                    'bindcraft': {
+                        'num_rounds': int,
+                        'total_sequences': int,
+                        'passing_sequences': int,
+                        'success_rate': float,
+                        'sequences_per_round': List[int],
+                        'passing_per_round': List[int],
+                        'parameters_used': Dict
+                    },
+                    'md': {
+                        'stable_complexes': int,
+                        'total_simulations': int,
+                        'avg_rmsd': float,
+                        'avg_binding_energy': float,
+                        'simulation_time': float
+                    }
+                }
+
+        Returns:
+            Dictionary containing:
+                - decision: Dict with status ("continue" or "complete"), reasoning, confidence
+                - evaluation: Dict with success_rate, meets_threshold, key_findings, strengths, weaknesses
+                - new_parameters: Dict with suggested parameters for next round (if continuing)
+                - parameter_reasoning: Dict with reasoning for each parameter change
+        """
+        try:
+            self.logger.info(f"Improving hypothesis {hypothesis_id} based on experimental results")
+
+            # Validate experimental_results structure
+            if not experimental_results:
+                raise ValueError("experimental_results cannot be empty")
+
+            if 'bindcraft' not in experimental_results or 'md' not in experimental_results:
+                raise ValueError("experimental_results must contain 'bindcraft' and 'md' sections")
+
+            # Create improvement task
+            task = Task(
+                task_type="improve_hypothesis",
+                agent_type="generation",
+                priority=2,
+                params={
+                    "hypothesis_id": hypothesis_id,
+                    "experimental_results": experimental_results
+                }
+            )
+
+            # Add task and wait for completion
+            self.supervisor.add_task(task)
+            self.supervisor.wait_for_all_tasks()
+
+            # Get the task result
+            result = task.result or {}
+
+            # Log the decision
+            decision = result.get("decision", {})
+            evaluation = result.get("evaluation", {})
+
+            self.logger.info(f"Improvement decision: {decision.get('status', 'unknown')}")
+            self.logger.info(f"Success rate: {evaluation.get('success_rate', 0):.2%}")
+            self.logger.info(f"Meets threshold: {evaluation.get('meets_threshold', False)}")
+
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Error improving hypothesis {hypothesis_id}: {e}")
+            return {
+                "error": str(e),
+                "hypothesis_id": hypothesis_id,
+                "decision": {
+                    "status": "error",
+                    "reasoning": f"Failed to improve hypothesis: {str(e)}",
+                    "confidence": 0.0
+                }
+            }
+
     # [The rest of the CoScientist class methods remain unchanged]
     # ... (methods like generate_hypotheses, review_hypotheses, run_tournament, etc.)
 
