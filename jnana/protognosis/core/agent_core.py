@@ -12,7 +12,7 @@ from queue import Queue, PriorityQueue
 import threading
 import logging
 import os
-
+import re
 from .llm_interface import LLMInterface
 
 # Configure logging
@@ -872,36 +872,74 @@ class SupervisorAgent:
         """
         self.logger.info(f"Parsing research goal: {research_goal[:100]}...")
         
-        # Create a schema for the expected output
-        schema = {
-            "type": "object",
-            "properties": {
-                "main_objective": {"type": "string"},
-                "domain": {"type": "string"},
-                "constraints": {"type": "array", "items": {"type": "string"}},
-                "preferences": {"type": "array", "items": {"type": "string"}},
-                "evaluation_criteria": {"type": "array", "items": {"type": "string"}}
-            },
-            "required": ["main_objective", "domain", "evaluation_criteria"]
-        }
-        
-        # Create a prompt for the LLM
-        prompt = f"""
-        You are a scientific research planner. Your task is to analyze the following research goal
-        and extract key information to guide a research process.
+        is_binder_design = re.search(r"Design.*binders for.*to optimize",
+                                     research_goal)
 
-        Research Goal:
-        {research_goal}
+        if is_binder_design:
 
-        Please extract:
-        1. The main objective of the research
-        2. The scientific domain(s) involved
-        3. Any constraints or limitations
-        4. Any preferences or priorities
-        5. Criteria that should be used to evaluate hypotheses
+            # Create a schema for the expected output
+            # how to represent the target and binder sequences?
+            
+            schema = {
+                "type": "object",
+                "properties": {
+                    "main_objective": {"type": "string"},
+                    "target_sequence": {"type": "string"},
+                    "binder_sequence": {"type": "string"},
+                    "domain": {"type": "string"},
+                    "constraints": {"type": "array", "items": {"type": "string"}},
+                    "preferences": {"type": "array", "items": {"type": "string"}},
+                    "evaluation_criteria": {"type": "array", "items": {"type": "string"}}
+                },
+                "required": ["main_objective", "domain", "evaluation_criteria"]
+            }
 
-        Format your response as a structured JSON object.
-        """
+            prompt = f"""
+            You are a scientific research planner. Your task is to analyze the following research goal
+            and extract key information to guide a research process.
+
+            Research Goal:
+            {research_goal}
+
+            Please extract:
+            1. The target protein sequence
+            2. The binder protein sequence
+            3. The main objective of the research
+            4. The scientific domain(s) involved
+            5. Any constraints or limitations
+            6. Any preferences or priorities
+            7. Criteria that should be used to evaluate hypotheses
+             
+            Format your response as a structured JSON object."""
+
+        else:
+            schema = {
+                "type": "object",
+                "properties": {
+                    "main_objective": {"type": "string"},
+                    "domain": {"type": "string"},
+                    "constraints": {"type": "array", "items": {"type": "string"}},
+                    "preferences": {"type": "array", "items": {"type": "string"}},
+                    "evaluation_criteria": {"type": "array", "items": {"type": "string"}}
+                },
+                "required": ["main_objective", "domain", "evaluation_criteria"]
+            }
+
+            prompt = f""" 
+            You are a scientific research planner. Your task is to analyze the following research goal
+            and extract key information to guide a research process.
+
+            Research Goal:
+            {research_goal}
+
+            Please extract:
+            1. The main objective of the research
+            2. The scientific domain(s) involved
+            3. Any constraints or limitations
+            4. Any preferences or priorities
+            5. Criteria that should be used to evaluate hypotheses
+
+            Format your response as a structured JSON object."""
 
         try:
             # Generate the research plan
