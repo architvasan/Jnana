@@ -175,6 +175,12 @@ class GenerationAgent(Agent):
                 response = response_data
                 self.total_calls += 1
             
+            # DEBUG: Log the response structure
+            self.logger.info(f"LLM response keys: {list(response.keys())}")
+            if "binder_data" in response:
+                self.logger.info(f"binder_data keys: {list(response['binder_data'].keys())}")
+                self.logger.info(f"target_sequence in binder_data: {response['binder_data'].get('target_sequence', 'NOT FOUND')[:50]}...")
+
             # Create a new hypothesis object
             metadata = {
                 "title": response["hypothesis"]["title"],
@@ -188,6 +194,7 @@ class GenerationAgent(Agent):
             if "binder_data" in response:
                 metadata["binder_data"] = response["binder_data"]
                 self.logger.info(f"Binder data included in hypothesis: {len(response['binder_data'].get('proposed_peptides', []))} peptides proposed")
+                self.logger.info(f"Stored binder_data in metadata with keys: {list(metadata['binder_data'].keys())}")
 
             hypothesis = ResearchHypothesis(
                 content=response["hypothesis"]["content"],
