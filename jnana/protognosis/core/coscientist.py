@@ -446,7 +446,7 @@ class CoScientist:
 
         # Default strategies if none provided
         all_strategies = ["literature_exploration", "scientific_debate",
-                         "assumptions_identification", "research_expansion"]
+                         "assumptions_identification", "research_expansion", "binder_gen"]
 
         if strategies:
             # Validate strategies

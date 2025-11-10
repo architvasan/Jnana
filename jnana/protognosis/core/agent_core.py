@@ -875,6 +875,7 @@ class SupervisorAgent:
         is_binder_design = re.search(r"Design.*binders for.*to optimize",
                                      research_goal)
 
+        is_binder_design = True
         if is_binder_design:
 
             # Create a schema for the expected output
@@ -943,7 +944,7 @@ class SupervisorAgent:
 
         try:
             # Generate the research plan
-            config = self.llm.generate_with_json_output(prompt, schema)
+            config = self.llm.generate_with_json_output(prompt, schema)[0]
             
             # Add the original research goal to the config
             config["original_research_goal"] = research_goal

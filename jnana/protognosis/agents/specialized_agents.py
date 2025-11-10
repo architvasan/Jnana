@@ -27,7 +27,7 @@ try:
         create_observation_review_prompt,
         create_debate_comparison_prompt
     )
-    EXTERNAL_PROMPTS = True
+    EXTERNAL_PROMPTS = False
 except ImportError:
     EXTERNAL_PROMPTS = False
     logging.warning("External prompt templates not found. Using built-in templates.")
@@ -74,11 +74,12 @@ class GenerationAgent(Agent):
         # Detect if this is a binder design task
         is_binder_design = ('target_sequence' in plan_config or
                            'binder_sequence' in plan_config)
+        is_binder_design = True
 
         # Determine generation strategy based on task parameters or randomly select one
         strategy = task.params.get("strategy")
         if not strategy:
-            strategies = ["literature_exploration", "scientific_debate", "assumptions_identification", "research_expansion"]
+            strategies = ["literature_exploration", "scientific_debate", "assumptions_identification", "research_expansion", "binder_gen"]
             strategy = random.choice(strategies)
 
         # Use the appropriate prompt template based on the strategy
@@ -109,6 +110,8 @@ class GenerationAgent(Agent):
                 top_hypotheses = self.memory.get_top_hypotheses(3)
                 top_summaries = "\n".join([f"- {h.summary}" for h in top_hypotheses]) if top_hypotheses else "No existing hypotheses yet."
                 prompt = self._create_research_expansion_prompt(research_goal, plan_config, top_summaries, is_binder_design)
+            elif strategy == "binder_gen":
+                prompt = self._create_literature_exploration_prompt(research_goal, plan_config, is_binder_design=True)
             else:
                 raise ValueError(f"Unknown generation strategy: {strategy}")
 
