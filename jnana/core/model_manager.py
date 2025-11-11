@@ -14,7 +14,7 @@ import logging
 
 # Import ProtoGnosis configuration classes
 try:
-    from multi_llm_config import LLMConfig, AgentLLMConfig
+    from jnana.protognosis.core.multi_llm_config import LLMConfig, AgentLLMConfig
     PROTOGNOSIS_AVAILABLE = True
 except ImportError:
     PROTOGNOSIS_AVAILABLE = False
@@ -23,7 +23,7 @@ except ImportError:
         def __init__(self, **kwargs):
             for k, v in kwargs.items():
                 setattr(self, k, v)
-    
+
     class AgentLLMConfig:
         def __init__(self, **kwargs):
             for k, v in kwargs.items():
