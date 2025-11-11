@@ -175,6 +175,7 @@ class GenerationAgent(Agent):
         try:
             # Check if tools are available
             tools = None
+            is_binder_design = True
             if self.tool_registry and is_binder_design:
                 tool_schemas = self.tool_registry.get_tool_schemas()
                 if tool_schemas:

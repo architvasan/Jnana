@@ -12,22 +12,22 @@ agents:
     provider: openai
     temperature: 0.8
   meta_review:
-    api_key: ${OPENAI_API_KEY} #${ANTHROPIC_API_KEY}
+    api_key: ${OPENAI_API_KEY}
     max_tokens: 4096
-    model: gpt-4o #claude-3-5-sonnet-20241022
+    model: gpt-4o
     provider: openai
     temperature: 0.6
   proximity:
-    api_key: ${OPENAI_API_KEY} #${GEMINI_API_KEY}
+    api_key: ${OPENAI_API_KEY}
     max_tokens: 1024
-    model: gpt-4o #gemini-1.5-pro
-    provider: openai #gemini
+    model: gpt-4o
+    provider: openai
     temperature: 0.5
   ranking:
-    api_key: ${OPENAI_API_KEY} #${GEMINI_API_KEY}
+    api_key: ${OPENAI_API_KEY}
     max_tokens: 1024
-    model: gpt-4o #gemini-1.5-pro
-    provider: openai #gemini
+    model: gpt-4o
+    provider: openai
     temperature: 0.4
   reflection:
     api_key: ${OPENAI_API_KEY}
