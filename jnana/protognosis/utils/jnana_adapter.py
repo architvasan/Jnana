@@ -237,38 +237,42 @@ class JnanaProtoGnosisAdapter:
             AgentLLMConfig for ProtoGnosis
         """
         try:
-            # UnifiedModelManager already has agent_llm_config created
-            # Just return it directly
-            if hasattr(self.model_manager, 'agent_llm_config'):
-                return self.model_manager.agent_llm_config
-
-            # Fallback: manually create from config
+            # Get the raw config dictionary from UnifiedModelManager
+            # We can't use model_manager.agent_llm_config directly because it might
+            # be created with a different AgentLLMConfig class (import issue)
             default_config = self.model_manager.config.get("default", {})
+            agents_config = self.model_manager.config.get("agents", {})
 
-            # Create default LLM config
+            # Create default LLM config using ProtoGnosis classes
             default_llm_config = LLMConfig(
                 provider=default_config.get("provider", "openai"),
                 model=default_config.get("model", "gpt-4o"),
                 api_key=default_config.get("api_key"),
+                base_url=default_config.get("base_url"),
                 temperature=default_config.get("temperature", 0.7),
-                max_tokens=default_config.get("max_tokens", 1024)
+                max_tokens=default_config.get("max_tokens", 2048),
+                model_adapter=default_config.get("model_adapter")
             )
 
-            # Create agent-specific configs if available
+            # Helper function to create LLMConfig from dict
+            def create_llm_config(config_dict: Dict[str, Any]) -> LLMConfig:
+                return LLMConfig(
+                    provider=config_dict.get("provider", default_llm_config.provider),
+                    model=config_dict.get("model", default_llm_config.model),
+                    api_key=config_dict.get("api_key", default_llm_config.api_key),
+                    base_url=config_dict.get("base_url", default_llm_config.base_url),
+                    temperature=config_dict.get("temperature", default_llm_config.temperature),
+                    max_tokens=config_dict.get("max_tokens", default_llm_config.max_tokens),
+                    model_adapter=config_dict.get("model_adapter", default_llm_config.model_adapter)
+                )
+
+            # Create agent-specific configs
             agent_configs = {}
+            for agent_type in ["supervisor", "generation", "reflection", "ranking", "evolution", "proximity", "meta_review"]:
+                if agent_type in agents_config:
+                    agent_configs[agent_type] = create_llm_config(agents_config[agent_type])
 
-            # Try to get agent-specific configurations
-            for agent_type in ["generation", "reflection", "ranking", "evolution", "proximity", "meta_review"]:
-                try:
-                    # get_model_for_agent returns LLMConfig object, not dict
-                    agent_llm_config = self.model_manager.get_model_for_agent(agent_type)
-                    if agent_llm_config:
-                        agent_configs[agent_type] = agent_llm_config
-                except:
-                    # Use default config if agent-specific config not available
-                    pass
-
-            # Create AgentLLMConfig
+            # Create AgentLLMConfig using ProtoGnosis class
             return AgentLLMConfig(
                 default=default_llm_config,
                 **agent_configs
@@ -276,6 +280,8 @@ class JnanaProtoGnosisAdapter:
 
         except Exception as e:
             self.logger.warning(f"Error converting model config, using defaults: {e}")
+            import traceback
+            traceback.print_exc()
             # Return basic default configuration
             return AgentLLMConfig(
                 default=LLMConfig(provider="openai", model="gpt-4o")
