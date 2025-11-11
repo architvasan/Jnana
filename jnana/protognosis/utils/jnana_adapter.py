@@ -232,14 +232,19 @@ class JnanaProtoGnosisAdapter:
     def _convert_model_config(self) -> AgentLLMConfig:
         """
         Convert Jnana model configuration to ProtoGnosis format.
-        
+
         Returns:
             AgentLLMConfig for ProtoGnosis
         """
         try:
-            # Get default model configuration
-            default_config = self.model_manager.get_default_config()
-            
+            # UnifiedModelManager already has agent_llm_config created
+            # Just return it directly
+            if hasattr(self.model_manager, 'agent_llm_config'):
+                return self.model_manager.agent_llm_config
+
+            # Fallback: manually create from config
+            default_config = self.model_manager.config.get("default", {})
+
             # Create default LLM config
             default_llm_config = LLMConfig(
                 provider=default_config.get("provider", "openai"),
@@ -248,32 +253,27 @@ class JnanaProtoGnosisAdapter:
                 temperature=default_config.get("temperature", 0.7),
                 max_tokens=default_config.get("max_tokens", 1024)
             )
-            
+
             # Create agent-specific configs if available
             agent_configs = {}
-            
+
             # Try to get agent-specific configurations
             for agent_type in ["generation", "reflection", "ranking", "evolution", "proximity", "meta_review"]:
                 try:
-                    agent_config = self.model_manager.get_model_for_agent(agent_type)
-                    if agent_config:
-                        agent_configs[agent_type] = LLMConfig(
-                            provider=agent_config.get("provider", default_llm_config.provider),
-                            model=agent_config.get("model", default_llm_config.model),
-                            api_key=agent_config.get("api_key", default_llm_config.api_key),
-                            temperature=agent_config.get("temperature", default_llm_config.temperature),
-                            max_tokens=agent_config.get("max_tokens", default_llm_config.max_tokens)
-                        )
+                    # get_model_for_agent returns LLMConfig object, not dict
+                    agent_llm_config = self.model_manager.get_model_for_agent(agent_type)
+                    if agent_llm_config:
+                        agent_configs[agent_type] = agent_llm_config
                 except:
                     # Use default config if agent-specific config not available
                     pass
-            
+
             # Create AgentLLMConfig
             return AgentLLMConfig(
                 default=default_llm_config,
                 **agent_configs
             )
-            
+
         except Exception as e:
             self.logger.warning(f"Error converting model config, using defaults: {e}")
             # Return basic default configuration
