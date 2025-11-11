@@ -74,7 +74,8 @@ class LLMInterface(ABC):
     @abstractmethod
     def generate_with_json_output(self, prompt: str, json_schema: Dict,
                                  system_prompt: Optional[str] = None,
-                                 temperature: float = 0.7, max_tokens: int = 1024) -> Union[Dict, Tuple[Dict, int, int]]:
+                                 temperature: float = 0.7, max_tokens: int = 1024,
+                                 tools: Optional[List[Dict]] = None) -> Union[Dict, Tuple[Dict, int, int]]:
         """
         Generate a response that conforms to a specific JSON schema.
 
@@ -84,6 +85,7 @@ class LLMInterface(ABC):
             system_prompt: Optional system instructions
             temperature: Controls randomness (0 to 1)
             max_tokens: Maximum response length
+            tools: Optional list of tool schemas (may not be used with json_object mode)
 
         Returns:
             Tuple containing:
@@ -92,6 +94,32 @@ class LLMInterface(ABC):
             - Number of completion tokens used
         """
         pass
+
+    def generate_with_tools(self, prompt: str, tools: List[Dict],
+                           system_prompt: Optional[str] = None,
+                           temperature: float = 0.7, max_tokens: int = 1024) -> Dict:
+        """
+        Generate a response with tool calling support.
+
+        This method allows the LLM to call tools/functions during generation.
+
+        Args:
+            prompt: The prompt to send to the LLM
+            tools: List of tool schemas in OpenAI format
+            system_prompt: Optional system-level instructions
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+
+        Returns:
+            Dictionary containing:
+                - 'content': Text response (if any)
+                - 'tool_calls': List of tool calls (if any)
+                - 'finish_reason': Why generation stopped
+                - 'prompt_tokens': Number of prompt tokens
+                - 'completion_tokens': Number of completion tokens
+        """
+        # Default implementation - subclasses should override
+        raise NotImplementedError("Tool calling not supported by this LLM provider")
 
 
 """
@@ -147,7 +175,8 @@ class AnthropicLLM(LLMInterface):
 
     def generate_with_json_output(self, prompt: str, json_schema: Dict,
                                  system_prompt: Optional[str] = None,
-                                 temperature: float = 0.7, max_tokens: int = 1024) -> Union[Dict, Tuple[Dict, int, int]]:
+                                 temperature: float = 0.7, max_tokens: int = 1024,
+                                 tools: Optional[List[Dict]] = None) -> Union[Dict, Tuple[Dict, int, int]]:
         """Generate a response that conforms to a JSON schema."""
         try:
             # Add JSON formatting instructions to the system prompt
@@ -243,7 +272,8 @@ class GeminiLLM(LLMInterface):
 
     def generate_with_json_output(self, prompt: str, json_schema: Dict,
                                  system_prompt: Optional[str] = None,
-                                 temperature: float = 0.7, max_tokens: int = 1024) -> Tuple[Dict, int, int]:
+                                 temperature: float = 0.7, max_tokens: int = 1024,
+                                 tools: Optional[List[Dict]] = None) -> Tuple[Dict, int, int]:
         """Generate a structured JSON response from Gemini."""
         schema_prompt = f"""
         Your response must be formatted as a JSON object according to this schema:
@@ -335,8 +365,22 @@ class OpenAILLM(LLMInterface):
 
     def generate_with_json_output(self, prompt: str, json_schema: Dict,
                                  system_prompt: Optional[str] = None,
-                                 temperature: float = 0.7, max_tokens: int = 1024) -> Tuple[Dict, int, int]:
-        """Generate a structured JSON response from OpenAI."""
+                                 temperature: float = 0.7, max_tokens: int = 1024,
+                                 tools: Optional[List[Dict]] = None) -> Tuple[Dict, int, int]:
+        """
+        Generate a structured JSON response from OpenAI.
+
+        Args:
+            prompt: The user prompt
+            json_schema: JSON schema for the response
+            system_prompt: Optional system prompt
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+            tools: Optional list of tool schemas for function calling
+
+        Returns:
+            Tuple of (parsed_response, prompt_tokens, completion_tokens)
+        """
         schema_prompt = f"""
         Your response must be formatted as a JSON object according to this schema:
         {json_schema}
@@ -350,13 +394,22 @@ class OpenAILLM(LLMInterface):
         messages = [{"role": "system", "content": system}]
         messages.append({"role": "user", "content": full_prompt})
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            response_format={"type": "json_object"}
-        )
+        # Build API call parameters
+        api_params = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "response_format": {"type": "json_object"}
+        }
+
+        # Add tools if provided (but don't use them with json_object mode)
+        # OpenAI doesn't support both tools and json_object response_format
+        # So we'll just log that tools are available but not use function calling
+        if tools:
+            logger.info(f"Tools available but not used with json_object mode: {[t['function']['name'] for t in tools]}")
+
+        response = self.client.chat.completions.create(**api_params)
 
         # Extract JSON string and parse
         import json
@@ -375,6 +428,75 @@ class OpenAILLM(LLMInterface):
             return parsed_response, prompt_tokens, completion_tokens
         except Exception as e:
             raise ValueError(f"Failed to parse JSON response: {e}. Response was: {response.choices[0].message.content}")
+
+    def generate_with_tools(self, prompt: str, tools: List[Dict],
+                           system_prompt: Optional[str] = None,
+                           temperature: float = 0.7, max_tokens: int = 1024) -> Dict:
+        """
+        Generate a response with tool calling support.
+
+        This allows the LLM to call tools/functions during generation.
+
+        Args:
+            prompt: The prompt to send to the LLM
+            tools: List of tool schemas in OpenAI format
+            system_prompt: Optional system-level instructions
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+
+        Returns:
+            Dictionary containing:
+                - 'content': Text response (if any)
+                - 'tool_calls': List of tool calls (if any), each with:
+                    - 'id': Tool call ID
+                    - 'name': Tool name
+                    - 'arguments': Dict of arguments
+                - 'finish_reason': Why generation stopped
+                - 'prompt_tokens': Number of prompt tokens
+                - 'completion_tokens': Number of completion tokens
+        """
+        system = system_prompt or "You are a helpful assistant."
+
+        messages = [{"role": "system", "content": system}]
+        messages.append({"role": "user", "content": prompt})
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            tools=tools,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+
+        message = response.choices[0].message
+        finish_reason = response.choices[0].finish_reason
+
+        # Get token counts
+        prompt_tokens = response.usage.prompt_tokens
+        completion_tokens = response.usage.completion_tokens
+
+        self.total_calls += 1
+        self.total_prompt_tokens += prompt_tokens
+        self.total_completion_tokens += completion_tokens
+
+        # Parse tool calls if present
+        tool_calls = []
+        if message.tool_calls:
+            import json
+            for tool_call in message.tool_calls:
+                tool_calls.append({
+                    'id': tool_call.id,
+                    'name': tool_call.function.name,
+                    'arguments': json.loads(tool_call.function.arguments)
+                })
+
+        return {
+            'content': message.content,
+            'tool_calls': tool_calls,
+            'finish_reason': finish_reason,
+            'prompt_tokens': prompt_tokens,
+            'completion_tokens': completion_tokens
+        }
 
 
 class OllamaLLM(LLMInterface):
@@ -432,7 +554,8 @@ class OllamaLLM(LLMInterface):
 
     def generate_with_json_output(self, prompt: str, json_schema: Dict,
                                  system_prompt: Optional[str] = None,
-                                 temperature: float = 0.7, max_tokens: int = 1024) -> Tuple[Dict, int, int]:
+                                 temperature: float = 0.7, max_tokens: int = 1024,
+                                 tools: Optional[List[Dict]] = None) -> Tuple[Dict, int, int]:
         """Generate a structured JSON response from Ollama."""
         schema_prompt = f"""
         Your response must be formatted as a JSON object according to this schema:
@@ -546,7 +669,8 @@ class LLMStudioLLM(LLMInterface):
 
     def generate_with_json_output(self, prompt: str, json_schema: Dict,
                                  system_prompt: Optional[str] = None,
-                                 temperature: float = 0.7, max_tokens: int = 1024) -> Tuple[Dict, int, int]:
+                                 temperature: float = 0.7, max_tokens: int = 1024,
+                                 tools: Optional[List[Dict]] = None) -> Tuple[Dict, int, int]:
         """Generate a structured JSON response from the LLM."""
         schema_prompt = f"""
         Your response must be formatted as a JSON object according to this schema:
@@ -626,7 +750,8 @@ class CerebrasLLM(LLMInterface):
 
     def generate_with_json_output(self, prompt: str, json_schema: Dict,
                                  system_prompt: Optional[str] = None,
-                                 temperature: float = 0.7, max_tokens: int = 1024) -> Dict:
+                                 temperature: float = 0.7, max_tokens: int = 1024,
+                                 tools: Optional[List[Dict]] = None) -> Dict:
         """Generate a structured JSON response from Cerebras."""
         schema_prompt = f"""
         Your response must be formatted as a JSON object according to this schema:
