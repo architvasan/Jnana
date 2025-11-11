@@ -56,7 +56,7 @@ class BindCraftTool:
             Tool schema in OpenAI function calling format
         """
         # Get defaults from config for schema documentation
-        default_device = self.config_defaults.get('device', 'cuda:0')
+        default_device = self.config_defaults.get('device', 'xpu:0')
         default_num_rounds = self.config_defaults.get('num_rounds', 1)
         default_if_kwargs = self.config_defaults.get('if_kwargs', {})
 
@@ -169,7 +169,7 @@ class BindCraftTool:
             logger.info(f"  - ProteinMPNN path: {task_params['proteinmpnn_path']}")
 
             # Call BindCraft agent's run_design_cycle method
-            result = await self.bindcraft_agent.run_design_cycle(task_params)
+            result = await self.bindcraft_agent._generate_binder_hypothesis(task_params)
 
             # Format results for LLM consumption
             formatted_result = self._format_results(result)
