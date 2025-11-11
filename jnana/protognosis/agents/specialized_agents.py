@@ -379,10 +379,18 @@ If you're satisfied with the literature-based sequences, you don't need to call 
             # Check if LLM made tool calls
             tool_calls = tool_response.get('tool_calls', [])
             if not tool_calls:
-                self.logger.info("LLM decided not to use tools")
+                self.logger.info("❌ LLM decided NOT to use computational tools")
+                # Log the LLM's reasoning if available
+                if tool_response.get('content'):
+                    self.logger.debug(f"LLM reasoning: {tool_response.get('content')}")
                 return []
 
-            self.logger.info(f"✓ LLM requested {len(tool_calls)} tool call(s)!")
+            self.logger.info(f"✅ LLM DECIDED TO USE COMPUTATIONAL TOOLS! Requested {len(tool_calls)} tool call(s)")
+
+            # Log details about each tool call decision
+            for i, tool_call in enumerate(tool_calls, 1):
+                self.logger.info(f"  Tool call {i}: {tool_call.get('name', 'unknown')}")
+                self.logger.debug(f"  Arguments: {tool_call.get('arguments', {})}")
 
             # Execute each tool call
             results = []
@@ -390,13 +398,23 @@ If you're satisfied with the literature-based sequences, you don't need to call 
                 tool_name = tool_call['name']
                 tool_args = tool_call['arguments']
 
-                self.logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
+                self.logger.info(f"🔧 Executing tool: {tool_name} with args: {tool_args}")
 
                 # Execute the tool via tool registry
                 result = await self.tool_registry.execute_tool(tool_name, **tool_args)
                 results.append(result)
 
-                self.logger.info(f"Tool {tool_name} executed: success={result.get('success')}")
+                if result.get('success'):
+                    num_sequences = len(result.get('top_sequences', []))
+                    self.logger.info(f"✓ Tool {tool_name} executed successfully! Generated {num_sequences} sequences")
+                else:
+                    self.logger.error(f"✗ Tool {tool_name} failed: {result.get('error', 'Unknown error')}")
+
+            # Summary
+            successful_results = [r for r in results if r.get('success')]
+            if successful_results:
+                total_sequences = sum(len(r.get('top_sequences', [])) for r in successful_results)
+                self.logger.info(f"🎉 Tool calling complete! Generated {total_sequences} computational sequences from {len(successful_results)} tool(s)")
 
             return results
 
