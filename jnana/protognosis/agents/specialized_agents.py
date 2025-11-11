@@ -35,17 +35,28 @@ except ImportError:
 class GenerationAgent(Agent):
     """
     Agent responsible for generating initial research hypotheses.
-    
+
     This agent uses various strategies to generate novel hypotheses:
     - Literature exploration via web search
     - Simulated scientific debates
     - Iterative assumptions identification
     - Research expansion
+
+    Can optionally use tools (e.g., BindCraft) during hypothesis generation.
     """
-    
-    def __init__(self, agent_id: str, llm: LLMInterface, memory: ContextMemory):
-        """Initialize the generation agent."""
+
+    def __init__(self, agent_id: str, llm: LLMInterface, memory: ContextMemory, tool_registry=None):
+        """
+        Initialize the generation agent.
+
+        Args:
+            agent_id: Unique identifier for this agent
+            llm: LLM interface for generation
+            memory: Context memory for storing hypotheses
+            tool_registry: Optional tool registry for function calling
+        """
         super().__init__(agent_id, "generation", llm, memory)
+        self.tool_registry = tool_registry
     
     async def execute_task(self, task: Task) -> Dict:
         """Execute a task to generate a hypothesis."""
@@ -162,13 +173,23 @@ class GenerationAgent(Agent):
             }
         
         try:
-            # Generate the hypothesis with the LLM
+            # Check if tools are available
+            tools = None
+            if self.tool_registry and is_binder_design:
+                tool_schemas = self.tool_registry.get_tool_schemas()
+                if tool_schemas:
+                    tools = tool_schemas
+                    self.logger.info(f"Tools available for LLM: {[t['function']['name'] for t in tools]}")
+
+            # Generate the hypothesis with the LLM (with optional tool support)
+            # Note: The LLM interface needs to support tools parameter
+            # For now, we'll call without tools and add tool support later if needed
             response_data = self.llm.generate_with_json_output(prompt, schema, system_prompt=system_prompt)
-            
+
             # Unpack the response data
             if isinstance(response_data, tuple) and len(response_data) == 3:
                 response, prompt_tokens, completion_tokens = response_data
-                
+
                 # Update token counts
                 self.total_calls += 1
                 self.total_prompt_tokens += int(prompt_tokens)
@@ -524,6 +545,16 @@ class GenerationAgent(Agent):
 
             if binder_seq:
                 base_prompt += f"   - Known binder sequence for reference: {binder_seq}\n\n"
+
+            # Add note about tools if available
+            if self.tool_registry and self.tool_registry.has_tool('bindcraft_design'):
+                base_prompt += (
+                    f"**OPTIONAL:** You have access to computational design tools:\n"
+                    f"   - bindcraft_design: Generate binders computationally using ProteinMPNN\n"
+                    f"   You can call this tool if you want to supplement literature-based sequences\n"
+                    f"   with computationally designed ones. However, you can also propose sequences\n"
+                    f"   purely from literature if you prefer.\n\n"
+                )
 
             base_prompt += (
                 f"Follow these steps:\n"

@@ -75,13 +75,16 @@ class ProtoGnosisDataConverter:
             version_string="1.0"
         )
         
-        # Add ProtoGnosis metadata
+        # Preserve ALL original metadata from ProtoGnosis hypothesis
+        # This includes binder_data and other task-specific data
+        unified_hypothesis.metadata.update(metadata)
+
+        # Add ProtoGnosis system metadata (without overwriting existing keys)
         unified_hypothesis.metadata.update({
             "protognosis_agent_id": pg_hypothesis.agent_id,
-            "protognosis_metadata": metadata,
             "conversion_timestamp": time.time()
         })
-        
+
         return unified_hypothesis
     
     @staticmethod
