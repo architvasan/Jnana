@@ -148,7 +148,7 @@ class GenerationAgent(Agent):
                         {
                             "sequence": "string",
                             "source": "string",
-                            "rationale": "string",
+                            #"rationale": "string",
                             "peptide_id": "string"
                         }
                     ],
