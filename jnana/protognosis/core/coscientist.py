@@ -14,7 +14,8 @@ from .agent_core import (
 )
 from ..agents.specialized_agents import (
     GenerationAgent, ReflectionAgent, RankingAgent,
-    EvolutionAgent, ProximityAgent, MetaReviewAgent
+    EvolutionAgent, ProximityAgent, MetaReviewAgent,
+    RecommenderAgent
 )
 from .multi_llm_config import LLMConfig, AgentLLMConfig
 
@@ -157,6 +158,13 @@ class CoScientist:
             self.supervisor.register_agent(agent)
             self._initialize_agent_state(agent)
 
+        # Recommender agents
+        for i in range(5):  # Create multiple recommendation agents
+            llm = self._get_llm_for_agent("recommender", f"recommender-{i}")
+            agent = RecommenderAgent(f"recommender-{i}", llm, self.memory)
+            self.supervisor.register_agent(agent)
+            self._initialize_agent_state(agent)
+
         # Ranking agent
         llm = self._get_llm_for_agent("ranking", "ranking-0")
         ranking_agent = RankingAgent("ranking-0", llm, self.memory)
@@ -232,6 +240,13 @@ class CoScientist:
                 "last_review_type": None
             })
 
+        elif agent.agent_type == "recommender":
+            initial_state.update({
+                "recommendations_generated": 0,
+                "previous_run": "",
+                "last_recommendation_id": None,
+            })
+
         self.memory.set_agent_state(agent.agent_id, initial_state)
         self.logger.info(f"Initialized state for agent {agent.agent_id} ({agent.agent_type})")
 
@@ -290,6 +305,16 @@ class CoScientist:
 
     def get_agent_usages(self, verbose=True):
         return self.supervisor.get_usages(verbose=verbose)
+
+    def get_all_recommendations(self):
+        """
+        Get all hypotheses from memory.
+
+        Returns:
+            List of ResearchHypothesis objects
+        """
+        return list(self.memory.recommendations.values())
+
 
     def get_all_hypotheses(self):
         """
@@ -475,6 +500,44 @@ class CoScientist:
             self.supervisor.add_task(task)
 
         return hypothesis_ids
+
+    def recommend_next_run(self, count: int, results: dict) -> List[str]:
+        """
+        Generate  recommendations for next run.
+
+        Args:
+            count: Number of recommendations to generate
+            results: results dictionary from bindcraft or simulation
+
+        Returns:
+            List of generated recommendations as hypothesis IDs
+        """
+        self.logger.info(f"Scheduling generation of {count} hypotheses")
+
+        if not self.memory.metadata.get("research_goal"):
+            raise ValueError("Research goal must be set before generating recommendation")
+
+        # Create tasks for recommendations generation
+        recommendation_ids = []
+
+        for i in range(count):
+            # Cycle through strategies
+
+            task = Task(
+                task_type="recommend_run",
+                agent_type="recommender",
+                priority=1,
+                params={
+                    "previous_run": results['run_type'],
+                    "research_goal": self.research_goal,
+                    "previous_conclusion": results['run_conc']
+                }
+            )
+
+            self.supervisor.add_task(task)
+
+        return recommendation_ids
+
 
     def review_hypotheses(self, hypothesis_ids: Optional[List[str]] = None,
                          review_types: Optional[List[str]] = None) -> Dict:

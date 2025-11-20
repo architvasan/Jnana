@@ -140,6 +140,55 @@ class JnanaProtoGnosisAdapter:
             self.logger.error(f"Error generating hypotheses: {e}")
             return []
     
+    async def generate_recommendations(self, research_goal: str, count: int = 5,
+                                 results: dict = None) -> List[UnifiedHypothesis]:
+        """
+        Generate recommendations using ProtoGnosis and convert to Jnana format.
+        
+        Args:
+            research_goal: The research goal/question
+            count: Number of hypotheses to generate
+            results: Results from previous run 
+            
+        Returns:
+            List of UnifiedHypothesis objects
+        """
+        if not self.is_initialized:
+            await self.initialize()
+        
+        if not self.coscientist:
+            raise RuntimeError("ProtoGnosis not initialized")
+        
+        try:
+            self.logger.info(f"Generating {count} hypotheses for: {research_goal[:100]}...")
+            
+            # Set research goal in ProtoGnosis
+            self.coscientist.set_research_goal(research_goal)
+            
+            # Generate hypotheses
+            recommendation_ids = self.coscientist.recommend_next_run(
+                count=count,
+                results=results
+            )
+            
+            # Wait for completion
+            self.coscientist.wait_for_completion()
+            
+            # Get generated hypotheses
+            pg_recommendations = self.coscientist.get_all_recommendations()
+            self.logger.info(f"Generated recommendations: {pg_recommendations}")
+            # Convert to Jnana format
+            #unified_recommendations = self.converter.batch_protognosis_to_unified(pg_recommendations)
+            
+            self.logger.info(f"Successfully generated and converted {len(pg_recommendations)} recommendations")
+            return pg_recommendations #unified_recommendations 
+            
+        except Exception as e:
+            self.logger.error(f"Error generating hypotheses: {e}")
+            return []
+
+
+
     async def run_tournament(self, hypotheses: List[UnifiedHypothesis], 
                            match_count: int = 25) -> List[UnifiedHypothesis]:
         """
