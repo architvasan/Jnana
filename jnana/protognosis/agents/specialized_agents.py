@@ -668,7 +668,12 @@ If you're satisfied with the literature-based sequences, you don't need to call 
             binder_seq = plan_config.get('binder_sequence', '')
 
             base_prompt += (
-                f"This is a BINDER DESIGN task. Your hypothesis must include:\n\n"
+                f"This is a BINDER DESIGN task. Please recommend starting peptides for the workflow.\n Only use custom peptides if real clinical information is available in a real literature. Do not hallucinate! Otherwise use either:\n\n"
+                "**Default peptides**: \n\n"
+                " - affibody: VDNKFNKELSVAGREIVTLPNLNDPQKKAFIFSLWDDPSQSANLLAEAKKLNDAQAPK"
+                "- nanobody: AQVQLQESGGGLVQAGGSLRLSCAASERTFSTYAMGWFRQAPGREREFLAQINWSGTTTYYAESVKDRTTISRDNAKNTVYLEMNNLNADDTGIYFCAAHPQRGWGSTLGWTYWGQGTQVTVSSGGGGSGGGKPIPNPLLGLDSTRTGHHHHHH"
+                "- affitin: MRGSHHHHHHGSVKVKFVSSGEEKEVDTSKIKKVWRNLTKYGTIVQFTYDDNGKTGRGYVRELDAPKELLDMLARAEGKLN"
+                "Your hypothesis must include:\n\n"
                 f"1. **Target Information:**\n"
                 f"   - Target protein name\n"
                 f"   - Target sequence: {target_seq}\n\n"
@@ -677,7 +682,7 @@ If you're satisfied with the literature-based sequences, you don't need to call 
                 f"   - Amino acid sequence (single-letter code)\n"
                 f"   - Source (e.g., 'literature:PMID12345', 'homology:ProteinX', 'de_novo')\n"
                 f"   - Rationale for why this peptide might bind the target\n"
-                f"   - Unique peptide ID (e.g., 'pep_001', 'pep_002')\n\n"
+                f"   - Unique peptide ID including whether this is affibody, nanobody or affitin (e.g., 'pep_001', 'pep_002')\n\n"
                 f"3. **Literature Support:**\n"
                 f"   - List of relevant literature references (PubMed IDs, DOIs, or citations)\n"
                 f"   - Key findings from literature that support your peptide choices\n\n"
@@ -3958,7 +3963,7 @@ class RecommenderAgent(Agent):
         
         schema = {
                 "next_task": "string",
-                "new_config": create_schema_from_config(previous_run["config"]),
+                "new_config": self._create_schema_from_config(previous_run["config"]),
                 "rationale": "string"
             }
             
@@ -4084,8 +4089,8 @@ class RecommenderAgent(Agent):
             f"Research goal:\n{research_goal}\n\n"
         )
 
-        new_task = recommendation.metadata["next_task"]
-        change_parameters = recommendation.metadata["change_parameters"]
+        new_task = recommendation[0]["metadata"]["next_task"]
+        change_parameters = recommendation[0]["metadata"]["change_parameters"]
         if new_task == 'bindcraft':
             if change_parameters:
                 old_parameters = previous_run["config"]
@@ -4096,7 +4101,7 @@ class RecommenderAgent(Agent):
                         f"Previous run type: {previous_runtype}\n\n"
                         f"Recommended next run: {new_task}\n\n"
                         f"Recommended to change the parameters. Old config: {json.dumps(old_parameters, indent=2)}"
-                        f"Rationale for next run and changing parameters: {recommendation.metadata['rationale']}"
+                        f"Rationale for next run and changing parameters: {recommendation[0]['metadata']['rationale']}"
                         f"Your output must include:"
                         f"1. ** New config with same format as old config ** \n\n"
                         f"2. ** Rationale for this config ** \n\n"
@@ -4115,7 +4120,7 @@ class RecommenderAgent(Agent):
         for key, value in config.items():
             if isinstance(value, dict):
                 # Recursive case: nested dictionary
-                schema[key] = create_schema_from_config(value)
+                schema[key] = self._create_schema_from_config(value)
             else:
                 # Base case: infer type from value
                 type_name = type(value).__name__
