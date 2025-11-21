@@ -538,6 +538,45 @@ class CoScientist:
 
         return recommendation_ids
 
+    def recommend_next_config(self, count: int, previous_run: dict, recommendation: object) -> List[str]:
+        """
+        Generate configs for next run.
+
+        Args:
+            count: Number of configs to generate
+            previous_run: dictionary from bindcraft or simulation with
+                          run_type, config
+            recommendation: recommendation for which job to run + rationale
+
+        Returns:
+            List of generated recommended configs as hypothesis IDs
+        """
+        self.logger.info(f"Scheduling generation of {count} hypotheses")
+
+        if not self.memory.metadata.get("research_goal"):
+            raise ValueError("Research goal must be set before generating recommendation")
+
+        # Create tasks for recommendations generation
+        recommendation_ids = []
+
+        for i in range(count):
+            # Cycle through strategies
+
+            task = Task(
+                task_type="plan_run",
+                agent_type="recommender",
+                priority=1,
+                params={
+                    "previous_run": previous_run,
+                    "recommendation": recommendation,
+                }
+            )
+
+            self.supervisor.add_task(task)
+
+        return recommendation_ids
+
+
 
     def review_hypotheses(self, hypothesis_ids: Optional[List[str]] = None,
                          review_types: Optional[List[str]] = None) -> Dict:

@@ -3924,25 +3924,30 @@ class RecommenderAgent(Agent):
 
     async def _plan_run(self, task: Task) -> Dict:
         """Generate a new research plan."""
-        self.logger.info(f"Generating hypothesis for task {task.task_id}")
+        """task should include information about:
+                new_run_type
+                old_run_type
+                recommendation
+                old_config
+        """
+        self.logger.info(f"Generating run plan for task {task.task_id}")
 
         # Get research goal from memory
         research_goal = self.memory.metadata.get("research_goal", "")
-        plan_config = self.memory.metadata.get("research_plan_config", {})
+        #plan_config = self.memory.metadata.get("research_plan_config", {})
 
         if not research_goal:
             raise ValueError("No research goal found in memory")
 
         # Check whether previous run was binder design or simulation
         previous_run = task.params.get('previous_run')
+        recommendation = task.params.get('recommendation')
+        #old_run_type = previous_run['run_type']
+        #old_config = previous_run['config']
 
-        # Check what conclusion was reached in previous run
-        previous_conclusion = task.params.get('previous_conclusion')
-
-
-        prompt = self._create_recommendation_prompt(research_goal,
+        prompt = self._create_research_planning_prompt(research_goal,
                     previous_run,
-                    previous_conclusion)
+                    recommendation)
 
         # Generate hypothesis using the LLM
         system_prompt = self.fill_prompt_template("system",
@@ -3952,13 +3957,11 @@ class RecommenderAgent(Agent):
         # Define the expected output schema based on hypothesis type
         
         schema = {
-                "recommendation": {
-                    "next_task": "string",
-                    "change_parameters": "boolean",
-                    "rationale": "string",
-                },
+                "next_task": "string",
+                "new_config": create_schema_from_config(previous_run["config"]),
+                "rationale": "string"
             }
-        
+            
         # STEP 1: Generate the initial hypothesis (structured JSON, no tool calling)
         response_data = self.llm.generate_with_json_output(
             prompt,
@@ -3985,14 +3988,14 @@ class RecommenderAgent(Agent):
 
         # Create a new hypothesis object
         metadata = {
-            "next_task": response["recommendation"]["next_task"],
-            "change_parameters": response["recommendation"]["change_parameters"],
-            "rationale": response["recommendation"]["rationale"],
+            "next_task": response["next_task"],
+            "new_config": response["new_config"],
+            "rationale": response["rationale"]
         }
 
         recommendation_hyp = ResearchRecommendation(
-            content=response["recommendation"]["next_task"],
-            summary=response["recommendation"]["rationale"],
+            content=response["rationale"],
+            summary=response["rationale"],
             agent_id=self.agent_id,
             metadata=metadata
         )
@@ -4086,7 +4089,7 @@ class RecommenderAgent(Agent):
         if new_task == 'bindcraft':
             if change_parameters:
                 old_parameters = previous_run["config"]
-                previous_runtype = previous_run["previous_run"]
+                previous_runtype = previous_run["run_type"]
                 #json.dumps(recent, indent=2)
                 base_prompt += (
                         f"Please base this research plan on previous run config + recommendations.\n\n"
@@ -4101,4 +4104,33 @@ class RecommenderAgent(Agent):
 
         return base_prompt
 
-
+    @staticmethod
+    def _create_schema_from_config(config):
+        """
+        Recursively create a schema from a config dictionary,
+        preserving the structure and inferring types.
+        """
+        schema = {}
+        
+        for key, value in config.items():
+            if isinstance(value, dict):
+                # Recursive case: nested dictionary
+                schema[key] = create_schema_from_config(value)
+            else:
+                # Base case: infer type from value
+                type_name = type(value).__name__
+                
+                # Map Python types to JSON-friendly type strings
+                type_mapping = {
+                    'str': 'string',
+                    'int': 'integer',
+                    'float': 'number',
+                    'bool': 'boolean',
+                    'list': 'array',
+                    'dict': 'object',
+                    'NoneType': 'null',
+                }
+                
+                schema[key] = type_mapping.get(type_name, 'string')
+        
+        return schema

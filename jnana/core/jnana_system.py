@@ -793,6 +793,32 @@ Generate an expansion-focused hypothesis:"""
         
         return recommendations
 
+    async def generate_single_recommend_config(self, previous_run: dict,
+                                recommendation: object,
+                                ) -> UnifiedHypothesis:
+        """
+        Generate a single recommended config based on a recommendation.
+        
+        Args:
+            strategy: Generation strategy to use
+            
+        Returns:
+            Generated hypothesis
+        """
+        if self.protognosis_adapter:
+            # Use ProtoGnosis for generation
+            session_info = self.session_manager.get_session_info()
+            research_goal = session_info.get('research_goal', 'No research goal set')
+
+            recommended_config = await self.protognosis_adapter.generate_config_recommendations(
+                research_goal=research_goal,
+                count=1,
+                previous_run=previous_run,
+                recommendation = recommendation
+            )
+        
+        return recommended_config
+
     async def refine_hypothesis(self, hypothesis: UnifiedHypothesis, 
                               feedback: str) -> UnifiedHypothesis:
         """

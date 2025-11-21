@@ -187,6 +187,54 @@ class JnanaProtoGnosisAdapter:
             self.logger.error(f"Error generating hypotheses: {e}")
             return []
 
+    async def generate_config_recommendations(self, research_goal: str, count: int = 5,
+                                 previous_run: dict = None, recommendation: object=None) -> List[UnifiedHypothesis]:
+        """
+        Generate recommendations using ProtoGnosis and convert to Jnana format.
+        
+        Args:
+            research_goal: The research goal/question
+            count: Number of hypotheses to generate
+            previous_run: a dictionary including both previous run_type and old config
+            recommendation: an object created via the recommend_run task
+        Returns:
+            List of UnifiedHypothesis objects
+        """
+        if not self.is_initialized:
+            await self.initialize()
+        
+        if not self.coscientist:
+            raise RuntimeError("ProtoGnosis not initialized")
+        
+        try:
+            self.logger.info(f"Generating {count} recommended configs for: {research_goal[:100]}...")
+            
+            # Set research goal in ProtoGnosis
+            if not hasattr(self.coscientist, 'research_goal'):
+                self.coscientist.set_research_goal(research_goal)
+            
+            # Generate hypotheses
+            recommendation_ids = self.coscientist.recommend_next_config(
+                count=count,
+                previous_run = previous_run,
+                recommendation=recommendation
+            )
+            
+            # Wait for completion
+            self.coscientist.wait_for_completion()
+            
+            # Get generated hypotheses
+            pg_recommend_config = self.coscientist.get_all_recommendations()
+            self.logger.info(f"Generated recommendations: {pg_recommendations}")
+            # Convert to Jnana format
+            #unified_recommendations = self.converter.batch_protognosis_to_unified(pg_recommendations)
+            
+            self.logger.info(f"Successfully generated and converted {len(pg_recommendations)} recommendations")
+            return pg_recommendations #unified_recommendations 
+            
+        except Exception as e:
+            self.logger.error(f"Error generating hypotheses: {e}")
+            return []
 
 
     async def run_tournament(self, hypotheses: List[UnifiedHypothesis], 
