@@ -16,6 +16,7 @@ from .ranking_agent import RankingAgent
 from .evolution_agent import EvolutionAgent
 from .proximity_agent import ProximityAgent
 from .meta_review_agent import MetaReviewAgent
+from .recommender_agent import RecommenderAgent 
 
 __all__ = [
     "GenerationAgent",
@@ -23,5 +24,6 @@ __all__ = [
     "RankingAgent", 
     "EvolutionAgent",
     "ProximityAgent",
-    "MetaReviewAgent"
+    "MetaReviewAgent",
+    "RecommenderAgent"
 ]
