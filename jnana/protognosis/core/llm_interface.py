@@ -9,6 +9,8 @@ import json
 import requests
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any, Union, Tuple
+from .inference_auth_token import get_access_token
+
 
 import logging
 
@@ -795,6 +797,195 @@ class CerebrasLLM(LLMInterface):
         except Exception as e:
             raise ValueError(f"Failed to parse JSON response: {e}. Response was: {response.choices[0].message.content}")
 
+
+class alcfLLM(LLMInterface):
+    """Implementation for OpenAI's API."""
+
+    def __init__(self, api_key: Optional[str] = None, model: str = "openai/gpt-oss-120b", model_adapter: Optional[Dict] = None):
+        """
+        Initialize the OpenAI LLM interface.
+
+        Args:
+            api_key: OpenAI API key (defaults to OPENAI_API_KEY env variable)
+            model: Model identifier to use
+            model_adapter: Optional configuration for model adaptation
+        """
+        super().__init__(model, model_adapter)
+        if 'metis' in model:
+            base_url = "https://inference-api.alcf.anl.gov/resource_server/metis/api/v1"
+            self.model = model.replace('metis/', '')
+        else:
+            base_url = "https://inference-api.alcf.anl.gov/resource_server/sophia/vllm/v1"
+            self.model = model
+        
+        self.model_adapter = model_adapter
+        api_key = get_access_token()
+
+        self.client = openai.OpenAI(
+                api_key=api_key,
+                base_url=base_url,
+            )
+       
+    def generate(self, prompt: str, system_prompt: Optional[str] = None,
+                 temperature: float = 0.7, max_tokens: int = 1024) -> str:
+        """Generate a response from OpenAI."""
+        messages = []
+
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+
+        messages.append({"role": "user", "content": prompt})
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+
+        return response.choices[0].message.content
+
+    def generate_with_json_output(self, prompt: str, json_schema: Dict,
+                                 system_prompt: Optional[str] = None,
+                                 temperature: float = 0.7, max_tokens: int = 1024,
+                                 tools: Optional[List[Dict]] = None) -> Tuple[Dict, int, int]:
+        """Generate a structured JSON response from OpenAI."""
+        schema_prompt = f"""
+        Your response must be formatted as a JSON object according to this schema:
+        {json_schema}
+
+        Ensure your response can be parsed by Python's json.loads().
+        """
+
+        full_prompt = f"{prompt}\n\n{schema_prompt}"
+        system = system_prompt or "You output only valid JSON according to the specified schema."
+
+        messages = [{"role": "system", "content": system,}]
+        messages.append({"role": "user", "content": full_prompt})
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format={"type": "json_object"},
+        )
+        print(f"{response=}")
+        while response.choices[0].message.content is None:
+            if response.choices[0].message.reasoning_content is not None:
+                print(f"{response=}")
+                messages.append({"role": "assistant", "content": response.choices[0].message.reasoning_content})
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                response_format={"type": "json_object"},
+            )
+
+
+        # Extract JSON string and parse
+        import json
+        try:
+            content = response.choices[0].message.content
+            parsed_response = json.loads(content)
+
+            # Get token counts from OpenAI response
+            prompt_tokens = response.usage.prompt_tokens
+            completion_tokens = response.usage.completion_tokens
+
+            self.total_calls += 1
+            self.total_prompt_tokens += prompt_tokens
+            self.total_completion_tokens += completion_tokens
+
+            return parsed_response, prompt_tokens, completion_tokens
+        except Exception as e:
+            raise ValueError(f"Failed to parse JSON response: {e}. Response was: {response.choices[0].message.content}")
+ 
+        
+class vllmLLM(LLMInterface):
+    """Implementation for OpenAI's API."""
+
+    def __init__(self, api_key: str = 'EMPTY', model: str = "openai/gpt-oss-120b", model_adapter: Optional[Dict] = None):
+        """
+        Initialize the OpenAI LLM interface.
+
+        Args:
+            api_key: OpenAI API key (defaults to OPENAI_API_KEY env variable)
+            model: Model identifier to use
+            model_adapter: Optional configuration for model adaptation
+        """
+        super().__init__(model, model_adapter)
+        self.model = model
+        self.model_adapter = model_adapter
+        
+        self.client = openai.OpenAI(base_url="http://localhost:8000/v1", api_key=api_key)
+
+    def generate(self, prompt: str, system_prompt: Optional[str] = None,
+                 temperature: float = 0.7, max_tokens: int = 1024) -> str:
+        """Generate a response from OpenAI."""
+        messages = []
+
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+
+        messages.append({"role": "user", "content": prompt})
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+
+        return response.choices[0].message.content
+
+    def generate_with_json_output(self, prompt: str, json_schema: Dict,
+                                 system_prompt: Optional[str] = None,
+                                 temperature: float = 0.7, max_tokens: int = 1024,
+                                 tools: Optional[List[Dict]] = None) -> Tuple[Dict, int, int]:
+        """Generate a structured JSON response from OpenAI."""
+        schema_prompt = f"""
+        Your response must be formatted as a JSON object according to this schema:
+        {json_schema}
+
+        Ensure your response can be parsed by Python's json.loads().
+        """
+
+        full_prompt = f"{prompt}\n\n{schema_prompt}"
+        system = system_prompt or "You output only valid JSON according to the specified schema."
+
+        messages = [{"role": "system", "content": system}]
+        messages.append({"role": "user", "content": full_prompt})
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format={"type": "json_object"}
+        )
+
+        # Extract JSON string and parse
+        import json
+        try:
+            content = response.choices[0].message.content
+            parsed_response = json.loads(content)
+
+            # Get token counts from OpenAI response
+            prompt_tokens = response.usage.prompt_tokens
+            completion_tokens = response.usage.completion_tokens
+
+            self.total_calls += 1
+            self.total_prompt_tokens += prompt_tokens
+            self.total_completion_tokens += completion_tokens
+
+            return parsed_response, prompt_tokens, completion_tokens
+        except Exception as e:
+            raise ValueError(f"Failed to parse JSON response: {e}. Response was: {response.choices[0].message.content}")
+ 
+
+
 def typify_schema(in_schema):
     out_schema = {}
 
@@ -890,6 +1081,14 @@ def create_llm(provider: str, api_key: Optional[str] = None, model: Optional[str
     elif provider == "cerebras":
         model = model or "cerebras_api_keyllama-4-scout-17b-16e-instruct"
         llm = CerebrasLLM(api_key=api_key, model=model, model_adapter=model_adapter)
+    elif provider == "alcf":
+        model = model or "openai/gpt-oss-120b"
+        # base_url = base_url or "https://inference-api.alcf.anl.gov/resource_server/sophia/vllm/v1"
+        llm = alcfLLM(model=model, model_adapter=model_adapter)
+    elif provider == "vllm":
+        model = model or "openai/gpt-oss-120b"
+        # base_url = base_url or "http://localhost:8000/v1"
+        llm = vllmLLM(model=model, model_adapter=model_adapter)
     else:
         raise ValueError(f"Unsupported LLM provider: {provider}")
     

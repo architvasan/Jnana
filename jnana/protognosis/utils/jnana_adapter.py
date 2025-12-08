@@ -337,7 +337,9 @@ class JnanaProtoGnosisAdapter:
             # Get the raw config dictionary from UnifiedModelManager
             # We can't use model_manager.agent_llm_config directly because it might
             # be created with a different AgentLLMConfig class (import issue)
-            default_config = self.model_manager.config.get("default", {})
+            
+            #default_config = self.model_manager.config.get("default", {})
+            default_config = self.model_manager.get_model_for_agent('default')
             agents_config = self.model_manager.config.get("agents", {})
 
             # Create default LLM config using ProtoGnosis classes
