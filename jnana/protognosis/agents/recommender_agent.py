@@ -12,6 +12,8 @@ import os
 
 from ..core.agent_core import Agent, Task, ResearchHypothesis, ResearchRecommendation, ContextMemory
 from ..core.llm_interface import LLMInterface
+from struct_bio_reasoner.prompts.prompts import get_prompt_manager, config_master
+    
 
 class RecommenderAgent(Agent):
     """
@@ -175,10 +177,11 @@ class RecommenderAgent(Agent):
     async def _plan_run(self, task: Task) -> Dict:
         """Generate a new research plan."""
         """task should include information about:
-                new_run_type
-                old_run_type
+                target_prot
+                history_list
                 recommendation
-                old_config
+                previous_run_type
+                new_run_type
         """
         self.logger.info(f"Generating run plan for task {task.task_id}")
 
@@ -192,13 +195,24 @@ class RecommenderAgent(Agent):
         # Check whether previous run was binder design or simulation
         previous_run = task.params.get('previous_run')
         recommendation = task.params.get('recommendation')
+        input_json = {'previous_run_type': previous_run['run_type'],
+                     'recommendation': recommendation}
         #old_run_type = previous_run['run_type']
         #old_config = previous_run['config']
 
-        prompt = self._create_research_planning_prompt(research_goal,
-                    previous_run,
-                    recommendation)
+        #prompt = self._create_research_planning_prompt(research_goal,
+        #            previous_run,
+        #            recommendation)
 
+        prompt_manager = get_prompt_manager(agent_type =recommendation.metadata['next_task'],
+                                            research_goal = research_goal,
+                                            input_json = input_json,
+                                            target_prot = self.memory.metadata.get('target_prot', ''),
+                                            prompt_type = 'running',
+                                            history_list = recommendation.metadata.get('history_list', []),
+                                            num_history = recommendation.metadata.get('num_history', 3),
+                                            ) 
+        prompt = prompt_manager.prompt_r
         # Generate hypothesis using the LLM
         system_prompt = self.fill_prompt_template("system",
                                                 agent_type="recommender",
@@ -208,7 +222,7 @@ class RecommenderAgent(Agent):
         
         schema = {
                 "next_task": "string",
-                "new_config": self._create_schema_from_config(previous_run["config"]),
+                "new_config": config_master[recommendation.metadata['next_task']],#self._create_schema_from_config(previous_run["config"]),
                 "rationale": "string"
             }
             
@@ -308,13 +322,11 @@ class RecommenderAgent(Agent):
         )
 
         base_prompt += (
-                f"This is a BINDER DESIGN task."
                 f"Please base this recommendation on previous run + conclusions.\n\n"
                 f"Previous run type: {previous_run}\n\n"
                 f"Previous run conclusion: {previous_conclusion}\n\n"
                 "Your recommendation must include:\n\n"
                 f"1. **Next run suggestion:**\n"
-                f"   - Choose either: bindcraft, simulation (in those exact words)\n"
                 f"2. **Next run parameters:**\n"
                 f"   - Should paramters: change, not change (in those exact words)\n"
                 f"2. **Rationale for the run choice:**\n"

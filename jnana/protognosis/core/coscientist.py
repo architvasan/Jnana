@@ -15,8 +15,8 @@ from .agent_core import (
 from ..agents.specialized_agents import (
     GenerationAgent, ReflectionAgent, RankingAgent,
     EvolutionAgent, ProximityAgent, MetaReviewAgent,
-    RecommenderAgent
 )
+from ..agents import RecommenderAgent
 from .multi_llm_config import LLMConfig, AgentLLMConfig
 
 class CoScientist:
