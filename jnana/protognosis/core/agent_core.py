@@ -455,7 +455,7 @@ class ContextMemory:
         self.papers[paper['paper_id']] = paper
         self._save_if_needed()
     
-    def set_research_goal(self, research_goal: str, research_plan: Dict) -> None:
+    def set_research_goal(self, research_goal: str, research_plan: Dict| None = None) -> None:
         """
         Set the research goal and plan.
         
@@ -464,7 +464,8 @@ class ContextMemory:
             research_plan: The parsed research plan
         """
         self.metadata["research_goal"] = research_goal
-        self.metadata["research_plan"] = research_plan
+        if research_plan != None:
+            self.metadata["research_plan"] = research_plan
         self.metadata["target_protein"] = _extract_target_sequence(research_goal)
         self._save_if_needed()
     
