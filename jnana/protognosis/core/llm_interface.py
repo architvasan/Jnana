@@ -854,8 +854,7 @@ class alcfLLM(LLMInterface):
         Your response must be formatted as a JSON object according to this schema:
         {json_schema}
 
-        Ensure your response can be parsed by Python's json.loads().
-        """
+        Ensure your response can be parsed by Python's json.loads()."""
 
         full_prompt = f"{prompt}\n\n{schema_prompt}"
         system = system_prompt or "You output only valid JSON according to the specified schema."

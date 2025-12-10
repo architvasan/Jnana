@@ -317,7 +317,7 @@ class RecommenderAgent(Agent):
         #preferences = ', '.join(plan_config.get('preferences', []))
 
         base_prompt = (
-            f"You are an AI co-scientist specializing in recommending the next run to perform based on previous conclusions.\n\n"
+            f"You are an AI co-scientist specializing in recommending the next run (computaional_design, molecular_dynamics, rag, free_energy, stop) to perform based on previous conclusions.\n\n"
             f"Research goal:\n{research_goal}\n\n"
         )
 
