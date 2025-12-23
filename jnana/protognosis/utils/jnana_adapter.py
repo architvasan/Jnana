@@ -225,12 +225,12 @@ class JnanaProtoGnosisAdapter:
             
             # Get generated hypotheses
             pg_recommend_config = self.coscientist.get_all_recommendations()
-            self.logger.info(f"Generated recommendations: {pg_recommendations}")
+            self.logger.info(f"Generated recommendations: {pg_recommend_config}")
             # Convert to Jnana format
             #unified_recommendations = self.converter.batch_protognosis_to_unified(pg_recommendations)
             
-            self.logger.info(f"Successfully generated and converted {len(pg_recommendations)} recommendations")
-            return pg_recommendations #unified_recommendations 
+            self.logger.info(f"Successfully generated and converted {len(pg_recommend_config)} recommendations")
+            return pg_recommend_config #unified_recommendations 
             
         except Exception as e:
             self.logger.error(f"Error generating hypotheses: {e}")

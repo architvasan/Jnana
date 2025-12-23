@@ -204,15 +204,23 @@ class RecommenderAgent(Agent):
         #            previous_run,
         #            recommendation)
 
+        if recommendation.metadata['next_task'] != 'rag':
+            prompt_type = 'running' 
+        else:
+            prompt_type = 'binder_design'
+
         prompt_manager = get_prompt_manager(agent_type =recommendation.metadata['next_task'],
                                             research_goal = research_goal,
                                             input_json = input_json,
                                             target_prot = self.memory.metadata.get('target_prot', ''),
-                                            prompt_type = 'running',
-                                            history_list = recommendation.metadata.get('history_list', []),
+                                            prompt_type = prompt_type,
+                                            history = recommendation.metadata.get('history_list', []),
                                             num_history = recommendation.metadata.get('num_history', 3),
                                             ) 
+        prompt_manager.running_prompt()
+
         prompt = prompt_manager.prompt_r
+        self.logger.info(f'prompt for running config recommendation is {prompt}')
         # Generate hypothesis using the LLM
         system_prompt = self.fill_prompt_template("system",
                                                 agent_type="recommender",
@@ -252,7 +260,7 @@ class RecommenderAgent(Agent):
 
         # Create a new hypothesis object
         metadata = {
-            "next_task": response["next_task"],
+            "next_task": recommendation.metadata['next_task'],
             "new_config": response["new_config"],
             "rationale": response["rationale"]
         }
@@ -266,6 +274,7 @@ class RecommenderAgent(Agent):
         
         # Add the hypothesis to memory
         self.memory.add_recommendation(recommendation_hyp)
+        self.logger.info('Added memory to recommendation!!!!!')
 
         # Update agent state
         try:
