@@ -224,7 +224,8 @@ class JnanaProtoGnosisAdapter:
             self.coscientist.wait_for_completion()
             
             # Get generated hypotheses
-            pg_recommend_config = self.coscientist.get_all_recommendations()
+            all_rec_configs = self.coscientist.get_all_recommendations()
+            pg_recommend_config = [all_rec_configs[r] for r in list(recommendation_ids)] 
             self.logger.info(f"Generated recommendations: {pg_recommend_config}")
             # Convert to Jnana format
             #unified_recommendations = self.converter.batch_protognosis_to_unified(pg_recommendations)
