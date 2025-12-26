@@ -313,7 +313,9 @@ class CoScientist:
         Returns:
             List of ResearchHypothesis objects
         """
-        return list(self.memory.recommendations.values())
+        recommendations_created = list(self.memory.recommendations.values())
+        self.memory.recommendations = {}
+        return recommendations_created#list(self.memory.recommendations.values())
 
 
     def get_all_hypotheses(self):

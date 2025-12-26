@@ -219,13 +219,15 @@ class JnanaProtoGnosisAdapter:
                 previous_run = previous_run,
                 recommendation=recommendation
             )
-            
+            self.logger.info(f'{recommendation_ids=}')
             # Wait for completion
             self.coscientist.wait_for_completion()
             
             # Get generated hypotheses
             all_rec_configs = self.coscientist.get_all_recommendations()
-            pg_recommend_config = [all_rec_configs[r] for r in list(recommendation_ids)] 
+            self.logger.info(f'{all_rec_configs=}')
+            self.logger.info(f'{[r.recommendation_id for r in all_rec_configs]}')
+            pg_recommend_config = all_rec_configs #[r for r in all_rec_configs if r.recommendation_id in recommendation_ids]#a[all_rec_configs[r] for r in list(recommendation_ids)] 
             self.logger.info(f"Generated recommendations: {pg_recommend_config}")
             # Convert to Jnana format
             #unified_recommendations = self.converter.batch_protognosis_to_unified(pg_recommendations)
