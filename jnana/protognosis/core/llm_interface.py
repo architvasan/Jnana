@@ -905,7 +905,7 @@ class alcfLLM(LLMInterface):
 class vllmLLM(LLMInterface):
     """Implementation for OpenAI's API."""
 
-    def __init__(self, api_key: str = 'EMPTY', model: str = "openai/gpt-oss-120b", model_adapter: Optional[Dict] = None):
+    def __init__(self, api_key: str = 'EMPTY', model: str = "openai/gpt-oss-120b", model_adapter: Optional[Dict] = None, base_url: str = 'http://10.113.40.1:8000/v1'):#str='http://10.113.40.1:8000/v1'):
         """
         Initialize the OpenAI LLM interface.
 
@@ -918,7 +918,13 @@ class vllmLLM(LLMInterface):
         self.model = model
         self.model_adapter = model_adapter
         
-        self.client = openai.OpenAI(base_url="http://localhost:8000/v1", api_key=api_key)
+        ip_w_port = base_url.split('/')[-2]
+        ip = ip_w_port.split(':')[0]
+        os.environ['no_proxy'] = f'{ip},localhost,127.0.0.1'
+        for envvar in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
+            os.environ.pop(envvar, None)
+
+        self.client = openai.OpenAI(base_url=base_url, api_key=api_key, timeout=60.0)
 
     def generate(self, prompt: str, system_prompt: Optional[str] = None,
                  temperature: float = 0.7, max_tokens: int = 1024) -> str:
@@ -982,7 +988,7 @@ class vllmLLM(LLMInterface):
             return parsed_response, prompt_tokens, completion_tokens
         except Exception as e:
             raise ValueError(f"Failed to parse JSON response: {e}. Response was: {response.choices[0].message.content}")
- 
+
 class huggingfaceLLM(LLMInterface):
     """Implementation for hugging face API."""
 
@@ -1001,11 +1007,21 @@ class huggingfaceLLM(LLMInterface):
 
         self.model_adapter = model_adapter
 
+        device_map = {
+            'model.embed_tokens': 0,
+            'lm_head': 11,
+        }
+
+        device_map.update({
+            f'model.layers.{i}': i//4 + 1
+            for i in range(36)
+        })
+
         self.client = pipeline(
             "text-generation",
             model=model,
             torch_dtype="auto",
-            device_map="auto"  # Automatically place on available GPUs
+            device_map=device_map
         )
 
     def generate(self, prompt: str, system_prompt: Optional[str] = None,
@@ -1186,7 +1202,7 @@ def _create_llm(provider: str, api_key: Optional[str] = None, model: Optional[st
     elif provider == "vllm":
         model = model or "openai/gpt-oss-120b"
         # base_url = base_url or "http://localhost:8000/v1"
-        llm = vllmLLM(model=model, model_adapter=model_adapter)
+        llm = vllmLLM(model=model, model_adapter=model_adapter, base_url=base_url)
     else:
         raise ValueError(f"Unsupported LLM provider: {provider}")
     

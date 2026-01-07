@@ -214,7 +214,7 @@ class RecommenderAgent(Agent):
                                             input_json = input_json,
                                             target_prot = self.memory.metadata.get('target_prot', ''),
                                             prompt_type = prompt_type,
-                                            history = recommendation.metadata.get('history_list', []),
+                                            history = recommendation.metadata.get('history', []),
                                             num_history = recommendation.metadata.get('num_history', 3),
                                             ) 
         prompt_manager.running_prompt()
