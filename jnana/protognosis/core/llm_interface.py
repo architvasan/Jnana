@@ -375,26 +375,30 @@ class OpenAILLM(LLMInterface):
         }
         if not (self.model_adapter or {}).get("omit_temperature", False):
             request["temperature"] = temperature
-        response = self.client.chat.completions.create(**request)
-
-        # Extract JSON string and parse
-        import json
-        try:
-            content = response.choices[0].message.content
-            parsed_response = json.loads(content)
-
-            # Get token counts from OpenAI-compatible responses when available.
-            usage = getattr(response, "usage", None)
-            prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
-            completion_tokens = getattr(usage, "completion_tokens", 0) or 0
-
-            self.total_calls += 1
-            self.total_prompt_tokens += prompt_tokens
-            self.total_completion_tokens += completion_tokens
-
-            return parsed_response, prompt_tokens, completion_tokens
-        except Exception as e:
-            raise ValueError(f"Failed to parse JSON response: {e}. Response was: {response.choices[0].message.content}")
+        last_error = None
+        content = ""
+        for attempt in range(3):
+            response = self.client.chat.completions.create(**request)
+            content = response.choices[0].message.content or ""
+            try:
+                parsed_response = json.loads(content)
+                usage = getattr(response, "usage", None)
+                prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+                self.total_calls += 1
+                self.total_prompt_tokens += prompt_tokens
+                self.total_completion_tokens += completion_tokens
+                return parsed_response, prompt_tokens, completion_tokens
+            except (json.JSONDecodeError, TypeError) as exc:
+                last_error = exc
+                logger.warning(
+                    "Invalid JSON response from OpenAI-compatible endpoint "
+                    "(attempt %d/3, content length %d)", attempt + 1, len(content)
+                )
+        raise ValueError(
+            f"Failed to parse JSON response after 3 attempts: {last_error}. "
+            f"Last response was: {content}"
+        )
 
 
 class OllamaLLM(LLMInterface):

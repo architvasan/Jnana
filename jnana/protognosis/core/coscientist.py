@@ -396,6 +396,56 @@ class CoScientist:
 
         return hypothesis_ids
 
+    def generate_hypotheses_batch(self, count: int = 20) -> List[str]:
+        """Generate many concise hypotheses in one model call and persist atomically."""
+        if count < 1:
+            raise ValueError("count must be at least one")
+        if not self.memory.metadata.get("research_goal"):
+            raise ValueError("Research goal must be set before generating hypotheses")
+
+        llm = self._get_llm_for_agent("generation", "generation-batch")
+        prompt = f"""
+        Generate exactly {count} distinct, concise scientific hypotheses for this research goal:
+        {self.research_goal}
+
+        Each item must identify a molecular or physical mechanism, a discriminating
+        prediction, and a validation method. Distinguish mechanism from phenotype.
+        """
+        schema = {
+            "hypotheses": [{
+                "title": "string",
+                "content": "string",
+                "summary": "string",
+                "key_novelty_aspects": ["string"],
+                "testable_predictions": ["string"],
+                "validation_method": "string",
+            }]
+        }
+        response = llm.generate_with_json_output(prompt, schema)
+        if isinstance(response, tuple):
+            response = response[0]
+        rows = response.get("hypotheses", [])
+        if len(rows) != count:
+            raise ValueError(f"Batch generation returned {len(rows)}/{count} hypotheses")
+
+        hypotheses = [
+            ResearchHypothesis(
+                content=row["content"],
+                summary=row["summary"],
+                agent_id="generation-batch",
+                metadata={
+                    "title": row["title"],
+                    "key_novelty_aspects": row.get("key_novelty_aspects", []),
+                    "testable_predictions": row.get("testable_predictions", []),
+                    "validation_method": row.get("validation_method", ""),
+                    "generation_strategy": "batched_diversity",
+                },
+            )
+            for row in rows
+        ]
+        self.memory.add_hypotheses(hypotheses)
+        return [hypothesis.hypothesis_id for hypothesis in hypotheses]
+
     def review_hypotheses(self, hypothesis_ids: Optional[List[str]] = None,
                          review_types: Optional[List[str]] = None) -> Dict:
         """

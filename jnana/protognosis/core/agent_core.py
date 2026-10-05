@@ -119,6 +119,7 @@ class ContextMemory:
             storage_path: Optional path to a JSON file for persistence
         """
         self.storage_path = storage_path
+        self._lock = threading.RLock()
         self.hypotheses = {}  # Map of hypothesis_id to ResearchHypothesis
         self.experiments = {}  # Map of experiment_id to Experiment
         self.analyses = {}  # Map of analysis_id to Analysis
@@ -178,38 +179,33 @@ class ContextMemory:
             logging.error(f"Error loading memory from {self.storage_path}: {str(e)}")
     
     def save(self):
-        """Save memory to storage."""
+        """Save memory to storage atomically."""
         if not self.storage_path:
             return
-        
-        try:
-            # Convert hypotheses to dictionaries
-            hypotheses_data = [h.to_dict() for h in self.hypotheses.values()]
-            
-            # Prepare data for saving
-            data = {
-                'hypotheses': hypotheses_data,
-                'experiments': self.experiments,
-                'analyses': self.analyses,
-                'papers': self.papers,
-                'metadata': self.metadata,
-                'agent_states': self.agent_states,
-                'datasets': self.datasets,
-                'training_plans': self.training_plans,
-                'evaluations': self.evaluations,
-                'tournament_state': self.tournament_state
-            }
-            
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(os.path.abspath(self.storage_path)), exist_ok=True)
-            
-            # Save to file
-            with open(self.storage_path, 'w') as f:
-                json.dump(data, f, indent=2)
-            
-            logging.info(f"Saved memory to {self.storage_path}")
-        except Exception as e:
-            logging.error(f"Error saving memory to {self.storage_path}: {str(e)}")
+
+        with self._lock:
+            try:
+                hypotheses_data = [h.to_dict() for h in self.hypotheses.values()]
+                data = {
+                    'hypotheses': hypotheses_data,
+                    'experiments': self.experiments,
+                    'analyses': self.analyses,
+                    'papers': self.papers,
+                    'metadata': self.metadata,
+                    'agent_states': self.agent_states,
+                    'datasets': self.datasets,
+                    'training_plans': self.training_plans,
+                    'evaluations': self.evaluations,
+                    'tournament_state': self.tournament_state
+                }
+                os.makedirs(os.path.dirname(os.path.abspath(self.storage_path)), exist_ok=True)
+                temporary_path = f"{self.storage_path}.tmp"
+                with open(temporary_path, 'w') as f:
+                    json.dump(data, f, indent=2)
+                os.replace(temporary_path, self.storage_path)
+                logging.info(f"Saved memory to {self.storage_path}")
+            except Exception as e:
+                logging.error(f"Error saving memory to {self.storage_path}: {str(e)}")
     
     def _save_if_needed(self):
         """Save memory if storage path is provided."""
@@ -244,8 +240,16 @@ class ContextMemory:
         Args:
             hypothesis: The hypothesis to add
         """
-        self.hypotheses[hypothesis.hypothesis_id] = hypothesis
-        self._save_if_needed()
+        with self._lock:
+            self.hypotheses[hypothesis.hypothesis_id] = hypothesis
+            self._save_if_needed()
+
+    def add_hypotheses(self, hypotheses: List[ResearchHypothesis]) -> None:
+        """Add a batch of hypotheses and persist one atomic snapshot."""
+        with self._lock:
+            for hypothesis in hypotheses:
+                self.hypotheses[hypothesis.hypothesis_id] = hypothesis
+            self._save_if_needed()
     
     def get_hypothesis(self, hypothesis_id: str) -> Optional[ResearchHypothesis]:
         """
