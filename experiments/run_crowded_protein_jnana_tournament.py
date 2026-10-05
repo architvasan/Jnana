@@ -78,7 +78,9 @@ def main() -> None:
     if state.exists() and not args.resume:
         raise SystemExit(f"Refusing to overwrite {state}; use --resume")
 
-    jnana_root = (Path.cwd().parent / "jnana").resolve()
+    # Resolve Jnana from this checkout so a fork run cannot silently import a
+    # sibling repository with the same package name.
+    jnana_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(jnana_root))
     from jnana.protognosis.core.agent_core import ResearchHypothesis
     from jnana.protognosis.core.coscientist import CoScientist
